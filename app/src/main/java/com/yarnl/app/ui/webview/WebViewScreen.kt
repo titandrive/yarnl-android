@@ -22,11 +22,15 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
@@ -200,6 +204,9 @@ fun WebViewScreen(
         }
     }
 
+    val systemBarsPadding = WindowInsets.systemBars.asPaddingValues()
+    val navBarPadding = WindowInsets.navigationBars.asPaddingValues()
+
     Box(modifier = Modifier.fillMaxSize()) {
         if (hasError) {
             // Error state
@@ -256,7 +263,9 @@ fun WebViewScreen(
             visible = isLoading && !hasError,
             enter = fadeIn(),
             exit = fadeOut(),
-            modifier = Modifier.align(Alignment.TopCenter),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = systemBarsPadding.calculateTopPadding()),
         ) {
             LinearProgressIndicator(
                 progress = { loadProgress / 100f },
@@ -271,7 +280,10 @@ fun WebViewScreen(
             onClick = onOpenSettings,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(16.dp)
+                .padding(
+                    end = 16.dp,
+                    bottom = 16.dp + navBarPadding.calculateBottomPadding(),
+                )
                 .size(40.dp),
             colors = IconButtonDefaults.filledIconButtonColors(
                 containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
