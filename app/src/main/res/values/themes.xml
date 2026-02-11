@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Yarnl" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@color/yarnl_darker</item>
+        <item name="android:navigationBarColor">@color/yarnl_darker</item>
+        <item name="android:windowBackground">@color/yarnl_darker</item>
+    </style>
+
+    <style name="Theme.Yarnl.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/yarnl_darker</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/Theme.Yarnl</item>
+    </style>
+</resources>

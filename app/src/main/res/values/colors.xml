@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="yarnl_darker">#FF13111C</color>
+    <color name="yarnl_dark">#FF1E1B2E</color>
+    <color name="yarnl_orange">#FFFFB703</color>
+    <color name="yarnl_text_primary">#FFE2E0EB</color>
+</resources>
