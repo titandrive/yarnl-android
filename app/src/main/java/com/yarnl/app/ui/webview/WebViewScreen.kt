@@ -7,6 +7,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Environment
 import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.URLUtil
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -44,10 +45,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,10 +61,15 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.yarnl.app.navigation.ShortcutAction
 import com.yarnl.app.ui.theme.YarnlDarker
 import com.yarnl.app.ui.theme.YarnlOrange
 import com.yarnl.app.ui.theme.YarnlTextDim
+import com.yarnl.app.util.AuthHelper
 import com.yarnl.app.util.CookieHelper
+import com.yarnl.app.util.ShortcutHelper
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -70,6 +78,9 @@ fun WebViewScreen(
     onOpenSettings: () -> Unit,
     fileChooserLauncher: androidx.activity.result.ActivityResultLauncher<Intent>,
     chromeClient: YarnlWebChromeClient,
+    shortcutAction: ShortcutAction? = null,
+    onShortcutActionConsumed: () -> Unit = {},
+    onContentReady: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -78,6 +89,19 @@ fun WebViewScreen(
     var loadProgress by remember { mutableIntStateOf(0) }
     var hasError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("Could not connect to server") }
+    var pendingShortcutAction by remember { mutableStateOf(shortcutAction) }
+    var isPageReady by remember { mutableStateOf(false) }
+
+    // Compute initial URL based on shortcut action
+    val initialUrl = remember(serverUrl, shortcutAction) {
+        when (shortcutAction) {
+            is ShortcutAction.Library -> "$serverUrl#library"
+            is ShortcutAction.Current -> "$serverUrl#current"
+            is ShortcutAction.Pattern -> "$serverUrl#pattern/${shortcutAction.patternId}"
+            is ShortcutAction.Upload -> serverUrl // File picker opens after page loads
+            null -> serverUrl
+        }
+    }
 
     val webView = remember {
         WebView(context).apply {
@@ -104,11 +128,95 @@ fun WebViewScreen(
             cookieManager.setAcceptCookie(true)
             cookieManager.setAcceptThirdPartyCookies(this, true)
 
+            // JavaScript interface for native callbacks
+            addJavascriptInterface(object {
+                @JavascriptInterface
+                fun updateRecentPattern(id: String, name: String) {
+                    ShortcutHelper.updateRecentPatternShortcut(context, id, name)
+                }
+
+                @JavascriptInterface
+                fun onShortcutHandled() {
+                    pendingShortcutAction = null
+                    onShortcutActionConsumed()
+                }
+
+                @JavascriptInterface
+                fun onPageReady() {
+                    isPageReady = true
+                    onContentReady()
+                }
+
+            }, "YarnlApp")
+
+            // Start invisible — only show once page content is ready
+            visibility = android.view.View.INVISIBLE
+
             webViewClient = object : WebViewClient() {
+                override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                    super.onPageStarted(view, url, favicon)
+                    // Pre-set auth flag so web app skips login render
+                    view?.evaluateJavascript(
+                        "try{localStorage.setItem('authenticated','true')}catch(e){}",
+                        null,
+                    )
+                }
+
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
                     isLoading = false
                     hasError = false
+
+                    // Force-hide login container, then reveal WebView + dismiss splash
+                    view?.evaluateJavascript("""
+                        (function() {
+                            var lc = document.getElementById('login-container');
+                            if (lc) lc.style.setProperty('display', 'none', 'important');
+                            setTimeout(function() {
+                                YarnlApp.onPageReady();
+                            }, 300);
+                        })()
+                    """.trimIndent(), null)
+                    view?.postDelayed({ view.visibility = android.view.View.VISIBLE }, 400)
+
+                    // Keep localStorage.authenticated synced
+                    view?.evaluateJavascript(
+                        "fetch('/api/auth/me').then(function(r){if(r.ok)localStorage.setItem('authenticated','true')}).catch(function(){})",
+                        null,
+                    )
+
+                    // Handle upload shortcut — delay to let web app finish tab restoration
+                    if (pendingShortcutAction is ShortcutAction.Upload) {
+                        view?.evaluateJavascript("""
+                            setTimeout(function() {
+                                if (typeof showUploadPanel === 'function') {
+                                    showUploadPanel();
+                                    if (typeof YarnlApp !== 'undefined') YarnlApp.onShortcutHandled();
+                                }
+                            }, 1500)
+                        """.trimIndent(), null)
+                    } else if (pendingShortcutAction != null) {
+                        pendingShortcutAction = null
+                        onShortcutActionConsumed()
+                    }
+
+                    // Update dynamic shortcut with most recent pattern
+                    view?.evaluateJavascript("""
+                        (function() {
+                            fetch('/api/patterns/recent')
+                                .then(function(r) { return r.json(); })
+                                .then(function(data) {
+                                    if (data && data.id) {
+                                        return fetch('/api/patterns/' + data.id)
+                                            .then(function(r) { return r.json(); })
+                                            .then(function(p) {
+                                                YarnlApp.updateRecentPattern(String(p.id), p.name || 'Recent Pattern');
+                                            });
+                                    }
+                                })
+                                .catch(function() {});
+                        })()
+                    """.trimIndent(), null)
                 }
 
                 override fun shouldOverrideUrlLoading(
@@ -172,7 +280,41 @@ fun WebViewScreen(
                 Toast.makeText(context, "Downloading $filename", Toast.LENGTH_SHORT).show()
             }
 
-            loadUrl(serverUrl)
+            loadUrl(initialUrl)
+        }
+    }
+
+    // Background pre-auth: only reload if we had to perform a fresh login
+    LaunchedEffect(Unit) {
+        val hadCookie = CookieManager.getInstance().getCookie(serverUrl)
+            ?.contains("session_id") == true
+        if (!hadCookie) {
+            val loggedIn = withContext(Dispatchers.IO) {
+                try {
+                    AuthHelper.ensureAuthenticated(serverUrl)
+                } catch (_: Exception) { false }
+            }
+            if (loggedIn) {
+                webView.reload()
+            }
+        }
+    }
+
+    // Handle shortcut action changes when app is already running (onNewIntent)
+    if (shortcutAction != null && shortcutAction != pendingShortcutAction) {
+        pendingShortcutAction = shortcutAction
+        when (shortcutAction) {
+            is ShortcutAction.Library -> webView.loadUrl("$serverUrl#library")
+            is ShortcutAction.Current -> webView.loadUrl("$serverUrl#current")
+            is ShortcutAction.Pattern -> webView.loadUrl("$serverUrl#pattern/${shortcutAction.patternId}")
+            is ShortcutAction.Upload -> {
+                pendingShortcutAction = null
+                onShortcutActionConsumed()
+                webView.evaluateJavascript(
+                    "if (typeof showUploadPanel === 'function') showUploadPanel();",
+                    null,
+                )
+            }
         }
     }
 
@@ -251,7 +393,7 @@ fun WebViewScreen(
                 }
             }
         } else {
-            // WebView
+            // WebView — starts INVISIBLE, shown after login container is hidden
             AndroidView(
                 factory = { webView },
                 modifier = Modifier.fillMaxSize(),

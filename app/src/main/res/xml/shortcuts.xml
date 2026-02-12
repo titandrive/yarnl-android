@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <shortcut
+        android:shortcutId="library"
+        android:enabled="true"
+        android:icon="@android:drawable/ic_menu_sort_by_size"
+        android:shortcutShortLabel="@string/shortcut_library"
+        android:shortcutLongLabel="@string/shortcut_library_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.yarnl.app"
+            android:targetClass="com.yarnl.app.MainActivity">
+            <extra android:name="shortcut_action" android:value="library" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="current"
+        android:enabled="true"
+        android:icon="@android:drawable/ic_menu_recent_history"
+        android:shortcutShortLabel="@string/shortcut_current"
+        android:shortcutLongLabel="@string/shortcut_current_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.yarnl.app"
+            android:targetClass="com.yarnl.app.MainActivity">
+            <extra android:name="shortcut_action" android:value="current" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="upload"
+        android:enabled="true"
+        android:icon="@android:drawable/ic_menu_upload"
+        android:shortcutShortLabel="@string/shortcut_upload"
+        android:shortcutLongLabel="@string/shortcut_upload_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.yarnl.app"
+            android:targetClass="com.yarnl.app.MainActivity">
+            <extra android:name="shortcut_action" android:value="upload" />
+        </intent>
+    </shortcut>
+
+</shortcuts>

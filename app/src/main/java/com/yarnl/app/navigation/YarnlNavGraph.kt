@@ -11,6 +11,13 @@ import com.yarnl.app.ui.setup.SetupScreen
 import com.yarnl.app.ui.webview.WebViewScreen
 import com.yarnl.app.ui.webview.YarnlWebChromeClient
 
+sealed class ShortcutAction {
+    data object Library : ShortcutAction()
+    data object Current : ShortcutAction()
+    data object Upload : ShortcutAction()
+    data class Pattern(val patternId: String) : ShortcutAction()
+}
+
 sealed class Screen(val route: String) {
     data object Setup : Screen("setup")
     data object WebView : Screen("webview")
@@ -25,6 +32,9 @@ fun YarnlNavGraph(
     preferencesRepository: PreferencesRepository,
     fileChooserLauncher: androidx.activity.result.ActivityResultLauncher<Intent>,
     chromeClient: YarnlWebChromeClient,
+    shortcutAction: ShortcutAction? = null,
+    onShortcutActionConsumed: () -> Unit = {},
+    onContentReady: () -> Unit = {},
 ) {
     NavHost(
         navController = navController,
@@ -49,6 +59,9 @@ fun YarnlNavGraph(
                 },
                 fileChooserLauncher = fileChooserLauncher,
                 chromeClient = chromeClient,
+                shortcutAction = shortcutAction,
+                onShortcutActionConsumed = onShortcutActionConsumed,
+                onContentReady = onContentReady,
             )
         }
 
